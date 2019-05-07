@@ -144,10 +144,16 @@ label_list = ['unrelated', 'agreed', 'disagreed']
 
 from run_classifier import *
 
+#MODIFIED
 train_examples = [InputExample('train', row.title1_zh, row.title2_zh, row.label) for row in train.itertuples()]
+train_a = [InputExample('train', row.title1_zh,row.label) for row in train.itertuples()]
+train_b = [InputExample('train', row.title2_zh,row.label) for row in train.itertuples()]
 val_examples = [InputExample('val', row.title1_zh, row.title2_zh, row.label) for row in val.itertuples()]
+val_a=[InputExample('val', row.title1_zh,row.label) for row in val.itertuples()]
+val_b=[InputExample('val', row.title2_zh,row.label) for row in val.itertuples()]
 test_examples = [InputExample('test', row.title1_zh, row.title2_zh, 'unrelated') for row in test.itertuples()]
-
+test_a=[InputExample('test', row.title1_zh,'unrelated') for row in test.itertuples()]
+test_b=[InputExample('test', row.title2_zh,'unrelated') for row in test.itertuples()]
 len(train_examples)
 
 
@@ -183,7 +189,8 @@ label_list = ['unrelated', 'agreed', 'disagreed']
 
 
 tokenizer = BertTokenizer.from_pretrained(VOCAB)
-model = BertForSequenceClassification.from_pretrained(MODEL,
+#MODIFIED model
+model = BertForSequenceClassificationCustom.from_pretrained(MODEL,
               cache_dir=cache_dir,
               num_labels = 3)
 model.to(device)
@@ -218,7 +225,11 @@ tr_loss = 0
 
 train_features = convert_examples_to_features(
     train_examples, label_list, max_seq_length, tokenizer)
-#TODO features for a and b
+train_a_features=convert_examples_to_features(
+    train_a, label_list, max_seq_length, tokenizer)
+train_b_features=convert_examples_to_features(
+    train_b, label_list, max_seq_length, tokenizer)
+
 logger.info("***** Running training *****")
 logger.info("  Num examples = %d", len(train_examples))
 logger.info("  Batch size = %d", train_batch_size)
@@ -227,7 +238,14 @@ all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.
 all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
 all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
 all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+#MODIFIED
+a_input_ids = torch.tensor([f.input_ids for f in train_a_features], dtype=torch.long)
+a_input_mask = torch.tensor([f.input_mask for f in train_a_features], dtype=torch.long)
+a_segment_ids = torch.tensor([f.segment_ids for f in train_a_features], dtype=torch.long)
+b_input_ids = torch.tensor([f.input_ids for f in train_b_features], dtype=torch.long)
+b_input_mask = torch.tensor([f.input_mask for f in train_b_features], dtype=torch.long)
+b_segment_ids = torch.tensor([f.segment_ids for f in train_b_features], dtype=torch.long)
+train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, a_input_ids,a_input_mask,a_segment_ids,b_input_ids,b_input_mask,b_segment_ids,all_label_ids)
 train_sampler = RandomSampler(train_data)
 train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=train_batch_size)
 
@@ -239,9 +257,9 @@ for _ in trange(int(num_train_epochs), desc="Epoch"):
     ten_percent_step = total_step // 10
     for step, batch in enumerate(train_dataloader):
         batch = tuple(t.to(device) for t in batch)
-        input_ids, input_mask, segment_ids, label_ids = batch
-        #TODO input to model
-        loss = model(input_ids, segment_ids, input_mask, label_ids)
+        #MODIFIED
+        input_ids, input_mask, segment_ids, a_in,a_mask,a_seg,b_in,b_mask,b_seg, label_ids= batch
+        loss = model(input_ids, segment_ids, input_mask, a_in, a_seg, a_mask, b_in, b_seg, b_mask, label_ids)
         if n_gpu > 1:
             loss = loss.mean() # mean() to average on multi-gpu.
         if gradient_accumulation_steps > 1:
@@ -281,7 +299,7 @@ with open(output_config_file, 'w') as f:
 
 # Load a trained model and config that you have fine-tuned
 config = BertConfig(output_config_file)
-model = BertForSequenceClassification(config, num_labels=len(label_list))
+model = BertForSequenceClassificationCustom(config, num_labels=len(label_list))
 model.load_state_dict(torch.load(output_model_file))
 model.to(device)  # important to specific device
 if n_gpu > 1:
@@ -299,9 +317,13 @@ config
 
 # val
 eval_examples = val_examples
-#TODO testing a and b
+
 eval_features = convert_examples_to_features(
     eval_examples, label_list, max_seq_length, tokenizer)
+eval_a_features=convert_examples_to_features(
+    eval_a, label_list, max_seq_length, tokenizer)
+eval_b_features=convert_examples_to_features(
+    eval_b, label_list, max_seq_length, tokenizer)
 logger.info("***** Running evaluation *****")
 logger.info("  Num examples = %d", len(eval_examples))
 logger.info("  Batch size = %d", eval_batch_size)
@@ -309,7 +331,14 @@ all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.l
 all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
 all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
 all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+#MODIFIED
+a_input_ids = torch.tensor([f.input_ids for f in eval_a_features], dtype=torch.long)
+a_input_mask = torch.tensor([f.input_mask for f in eval_a_features], dtype=torch.long)
+a_segment_ids = torch.tensor([f.segment_ids for f in eval_a_features], dtype=torch.long)
+b_input_ids = torch.tensor([f.input_ids for f in eval_b_features], dtype=torch.long)
+b_input_mask = torch.tensor([f.input_mask for f in eval_b_features], dtype=torch.long)
+b_segment_ids = torch.tensor([f.segment_ids for f in eval_b_features], dtype=torch.long)
+eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, a_input_ids,a_input_mask,a_segment_ids,b_input_ids,b_input_mask,b_segment_ids,all_label_ids)
 # Run prediction for full data
 eval_sampler = SequentialSampler(eval_data)
 eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=eval_batch_size)
@@ -318,16 +347,22 @@ model.eval()
 eval_loss, eval_accuracy = 0, 0
 nb_eval_steps, nb_eval_examples = 0, 0
 
-for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
+#MODIFIED
+for input_ids, input_mask, segment_ids, a_in, a_mask, a_seg, b_in, b_mask, b_seg, label_ids in eval_dataloader:
     input_ids = input_ids.to(device)
     input_mask = input_mask.to(device)
     segment_ids = segment_ids.to(device)
     label_ids = label_ids.to(device)
+    a_in=a_in.to(device)
+    a_mask=a_mask.to(device)
+    a_seg=a_seg.to(device)
+    b_in=b_in.to(device)
+    b_mask=b_mask.to(device)
+    b_seg=b_seg.to(device)
 
     with torch.no_grad():
-        #TODO model
-        tmp_eval_loss = model(input_ids, segment_ids, input_mask, label_ids)
-        logits = model(input_ids, segment_ids, input_mask)
+        tmp_eval_loss = model(input_ids, segment_ids, input_mask, a_in, a_seg, a_mask, b_in, b_seg, b_mask, label_ids)
+        logits = model(input_ids, segment_ids, input_mask, a_in, a_seg, a_mask, b_in, b_seg, b_mask)
 
     logits = logits.detach().cpu().numpy()
     label_ids = label_ids.to('cpu').numpy()
@@ -376,13 +411,15 @@ model
 
 # In[31]:
 
-
-def predict(model, tokenizer, examples, label_list, eval_batch_size=128):
+#MODIFIED input
+def predict(model, tokenizer, examples, examples_a, examples_b, label_list, eval_batch_size=128):
     model.to(device)
-    eval_examples = examples
-    #TODO a and b
     eval_features = convert_examples_to_features(
-        eval_examples, label_list, max_seq_length, tokenizer)
+        examples, label_list, max_seq_length, tokenizer)
+    eval_a_features = convert_examples_to_features(
+        examples_a, label_list, max_seq_length, tokenizer)
+    eval_b_features = convert_examples_to_features(
+        examples_b, label_list, max_seq_length, tokenizer)
     logger.info("***** Running evaluation *****")
     logger.info("  Num examples = %d", len(eval_examples))
     logger.info("  Batch size = %d", eval_batch_size)
@@ -390,7 +427,15 @@ def predict(model, tokenizer, examples, label_list, eval_batch_size=128):
     all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
     all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-    eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    
+    a_input_ids = torch.tensor([f.input_ids for f in eval_a_features], dtype=torch.long)
+    a_input_mask = torch.tensor([f.input_mask for f in eval_a_features], dtype=torch.long)
+    a_segment_ids = torch.tensor([f.segment_ids for f in eval_a_features], dtype=torch.long)
+    b_input_ids = torch.tensor([f.input_ids for f in eval_b_features], dtype=torch.long)
+    b_input_mask = torch.tensor([f.input_mask for f in eval_b_features], dtype=torch.long)
+    b_segment_ids = torch.tensor([f.segment_ids for f in eval_b_features], dtype=torch.long)
+    
+    eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, a_input_ids, a_input_mask, a_segment_ids, b_input_ids, b_input_mask, b_segment_ids, all_label_ids)
     # Run prediction for full data
     eval_sampler = SequentialSampler(eval_data)
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=eval_batch_size)
@@ -400,16 +445,21 @@ def predict(model, tokenizer, examples, label_list, eval_batch_size=128):
     nb_eval_steps, nb_eval_examples = 0, 0
     
     res = []
-    for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
+    for input_ids, input_mask, segment_ids, label_ids, a_in, a_mask, a_seg, b_in, b_mask, b_seg in eval_dataloader:
         input_ids = input_ids.to(device)
         input_mask = input_mask.to(device)
         segment_ids = segment_ids.to(device)
+        a_in=a_in.to(device)
+        a_mask=a_mask.to(device)
+        a_seg=a_seg.to(device)
+        b_in=b_in.to(device)
+        b_mask=b_mask.to(device)
+        b_seg=b_seg.to(device)
 #         label_ids = label_ids.to(device)
 
         with torch.no_grad():
 #             tmp_eval_loss = model(input_ids, segment_ids, input_mask, label_ids)
-            #TODO input to model
-            logits = model(input_ids, segment_ids, input_mask)
+            logits = model(input_ids, segment_ids, input_mask,a_in, a_seg, a_mask, b_in, b_seg, b_mask)
 
         logits = logits.detach().cpu().numpy()
 #         print(logits)
@@ -443,8 +493,8 @@ def predict(model, tokenizer, examples, label_list, eval_batch_size=128):
 
 # In[32]:
 
-
-res = predict(model, tokenizer, test_examples, label_list)
+#MODIFIED
+res = predict(model, tokenizer, test_examples, test_a, test_b, label_list)
 
 
 # In[33]:
@@ -461,8 +511,8 @@ set(res)
 
 # In[35]:
 
-
-predict(model, tokenizer, test_examples[:10], label_list)
+#MODIFIED
+predict(model, tokenizer, test_examples[:10], test_a[:10], test_b[:10], label_list)
 
 
 # In[36]:
