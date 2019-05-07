@@ -1045,25 +1045,30 @@ class BertForSequenceClassificationCustom(BertPreTrainedModel):
         super(BertForSequenceClassification, self).__init__(config)
         self.num_labels = num_labels
         self.bert = BertModel(config)
+        #MODIFIED
+        if config.sim_name!="None":
+            self.mapping=nn.Linear(config.hidden_size,config.mapping_size)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        self.classifier = nn.Linear(config.hidden_size+1, num_labels)
+        self.sim_name=config.sim_name
         self.apply(self.init_bert_weights)
-
     def forward(self, input_ids, token_type_ids=None, attention_mask=None,a_id=None,a_token=None,a_mask=None,b_id=None,b_token=None,b_mask=None, labels=None):
         _, pooled_output = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
-        _,a_output=self.bert(a_id,a_token,a_mask, output_all_encoded_layers=False)
-        _,b_output=self.bert(b_id,b_token,b_mask, output_all_encoded_layers=False)
-        #TODO nn
-        a=torch.nn(...)
-        b=torch.nn(...)
-        #MODIFIED
-        sim_name = 'cos'
-        if sim_name == 'cos':
-            cos = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
-            sim = cos(a, b)
-        concate_tensor = torch.cat((pooled_output, sim), 0)
-        pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
+        if config.sim_name!="None":
+            #MODIFIED
+            _,a_output=self.bert(a_id,a_token,a_mask, output_all_encoded_layers=False)
+            _,b_output=self.bert(b_id,b_token,b_mask, output_all_encoded_layers=False)
+            a=self.mapping(a_output)
+            b=self.mapping(a_output)
+            if self.sim_name == 'cos':
+                cos = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
+                sim = cos(a, b)
+            pooled_output = self.dropout(pooled_output)
+            concate_tensor = torch.cat((pooled_output, sim), 0)
+            logits = self.classifier(concate_tensor)
+        else:
+            pooled_output = self.dropout(pooled_output)
+            logits = self.classifier(pooled_output)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
